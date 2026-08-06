@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Какой ты Смешарик в офисе?</title>
+    <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+    
+    <style>
+        @font-face {
+            font-family: 'Pac-Man1980';
+            src: url('Pac-Man1980-Regular.ttf?v=22') format('opentype');
+        }
+
+        body {
+            background-image: url('background_start.webp?v=22');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            
+            color: #333333;
+            font-family: 'Pac-Man1980', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            
+            max-width: 480px; 
+            margin: 0 auto;
+            
+            min-height: var(--tg-viewport-stable-height, 100vh);
+            
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .panel {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            box-sizing: border-box;
+            transition: opacity 0.3s ease-in-out;
+        }
+
+        .transparent {
+            opacity: 0 !important;
+        }
+
+        #question-counter {
+            font-size: 9px; 
+            color: #a5b1b8; 
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        h2 { font-size: 18px; margin-bottom: 20px; color: #000000; margin-top: 0; } 
+        p { font-size: 13px; line-height: 1.5; margin-bottom: 20px; } 
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            
+            background-color: transparent; 
+            background-image: url('blue_button.png?v=22');
+            background-size: 100% 100%;
+            background-repeat: no-repeat;
+            background-position: center;
+            
+            color: #ffffff; 
+            border: none;
+            border-radius: 0; 
+            font-size: 13px; 
+            font-weight: bold;
+            cursor: pointer;
+            box-sizing: border-box;
+            
+            font-family: 'Pac-Man1980', Arial, sans-serif;
+            image-rendering: pixelated; 
+            
+            transition: opacity 0.2s ease, transform 0.1s ease;
+        }
+
+        .btn:active { opacity: 0.7; }
+        
+        .btn-pressed {
+            opacity: 0.5 !important;
+            transform: scale(0.96) !important;
+        }
+        
+        .btn-story { background-image: url('orange_button.png?v=22'); }
+        .btn-share { background-image: url('green_button.png?v=22'); }
+        .btn-back { background-image: url('grey_button.png?v=22'); margin-top: 25px; }
+        
+        #quiz-container { display: none; }
+        #result-container { display: none; }
+        
+        #start-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            height: 41vh; 
+            padding-bottom: 30px;
+        }
+        
+        .character-name { font-size: 22px; color: #ff8a65; margin: 10px 0; font-weight: bold; } 
+        #character-desc { font-size: 13px; line-height: 1.5; margin-bottom: 20px; } 
+        
+        #character-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 12px;
+            display: none;
+            margin: 0 auto 15px auto;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-container">
+        <button class="btn" onclick="startQuiz()" style="width: 220px; margin: 0 auto; font-size: 16px; padding: 15px;">Начать</button>
+    </div>
+
+    <div id="quiz-container" class="panel transparent">
+        <div id="question-counter"></div>
+        <h2 id="question-text">Загрузка...</h2>
+        <div id="buttons-container"></div>
+    </div>
+
+    <div id="result-container" class="panel transparent">
+        <div id="character-name" class="character-name"></div>
+        <img id="character-image" src="" alt="Твой персонаж">
+        <p id="character-desc"></p>
+        
+        <button class="btn btn-story" onclick="shareStory()">Поделиться в Сторис</button>
+        <button class="btn btn-share" onclick="shareWithFriends()">Поделиться с друзьями</button>
+        <button class="btn" onclick="restartQuiz()">Пройти заново</button>
+    </div>
+
+    <script>
+        let tg = window.Telegram.WebApp;
+        tg.expand();
+
+        let currentWinner = "";
+
+        const questions = [
+            {
+                text: "Как ты относишься к дедлайнам?",
+                answers: [
+                    { text: "Они меня пугают, работаю по вдохновению", weights: { "Бараш": 3, "Нюша": 1, "Копатыч": -2, "Пин": -1 } },
+                    { text: "Всё готово за неделю до сдачи", weights: { "Ёжик": 3, "Лосяш": 1, "Крош": -2 } },
+                    { text: "Пашу как проклятый, еле-еле успеваю", weights: { "Копатыч": 3, "Пин": 1, "Биби": -2 } },
+                    { text: "Сдвигаю их, потому что я так захотел", weights: { "Биби": 3, "Крош": 1, "Ёжик": -2 } }
+                ]
+            },
+            {
+                text: "Твоя роль на рабочем созвоне?",
+                answers: [
+                    { text: "Разбираю каждую деталь по часу", weights: { "Лосяш": 3, "Ёжик": 1, "Крош": -2 } },
+                    { text: "Быстро накидываю идеи и отключаюсь", weights: { "Крош": 3, "Нюша": 1, "Ёжик": -2 } },
+                    { text: "Спрашиваю, все ли сегодня поели", weights: { "Совунья": 3, "Копатыч": 1, "Биби": -1 } },
+                    { text: "Чиню всем микрофоны и связь", weights: { "Пин": 3, "Биби": 1, "Бараш": -1 } }
+                ]
+            },
+            {
+                text: "Что ты делаешь на корпоративе?",
+                answers: [
+                    { text: "Танцую в центре зала и снимаю видео", weights: { "Нюша": 3, "Крош": 1, "Бараш": -1, "Ёжик": -2 } },
+                    { text: "Весь вечер болтаю с кем-то на улице", weights: { "Крош": 3, "Копатыч": 1, "Лосяш": -1 } },
+                    { text: "Тихо сижу в сторонке с напитком", weights: { "Бараш": 3, "Ёжик": 2, "Нюша": -2 } },
+                    { text: "Я не приду туда, не ждите", weights: { "Копатыч": 3, "Совунья": 2, "Крош": -2, "Биби": 2 } }
+                ]
+            },
+            {
+                text: "Что обычно лежит у тебя на рабочем столе?",
+                answers: [
+                    { text: "Куча гаджетов, проводов и железок", weights: { "Пин": 3, "Биби": 1, "Ёжик": -1 } },
+                    { text: "Таблетки от головы, чай и печенье", weights: { "Совунья": 3, "Бараш": 1, "Лосяш": -1 } },
+                    { text: "Идеальный порядок, всё по полочкам", weights: { "Ёжик": 3, "Лосяш": 1, "Крош": -2 } },
+                    { text: "Умные книги и важные документы", weights: { "Лосяш": 3, "Пин": 1, "Нюша": -2 } }
+                ]
+            },
+            {
+                text: "Если проект горит, ты:",
+                answers: [
+                    { text: "Ждёшь, пока всё пройдёт само собой", weights: { "Совунья": 3, "Пин": 1, "Биби": -2 } },
+                    { text: "Наводишь суету в самый последний момент", weights: { "Крош": 3, "Нюша": 1, "Ёжик": -2 } },
+                    { text: "Пишешь заявление по собственному желанию", weights: { "Биби": 3, "Бараш": 1, "Копатыч": -3 } },
+                    { text: "Просто берешь и делаешь всю работу за всех", weights: { "Копатыч": 3, "Ёжик": 1, "Биби": -2 } }
+                ]
+            },
+            {
+                text: "О чем ты любишь поболтать с коллегами на обеде?",
+                answers: [
+                    { text: "О сплетнях и кто с кем встречается", weights: { "Нюша": 3, "Крош": 1, "Пин": -2 } },
+                    { text: "О науке и новых трендах рынка", weights: { "Лосяш": 3, "Пин": 1, "Нюша": -2 } },
+                    { text: "О правилах орфографии в рабочих чатах", weights: { "Ёжик": 3, "Бараш": 1, "Крош": -2 } },
+                    { text: "Я не болтаю, я работаю", weights: { "Пин": 3, "Копатыч": 1, "Совунья": -1 } }
+                ]
+            },
+            {
+                text: "Твое отношение к утренним планеркам?",
+                answers: [
+                    { text: "Опаздываю, но врываюсь с гениальной идеей", weights: { "Крош": 3, "Нюша": 1, "Ёжик": -2 } },
+                    { text: "Прихожу с кофе и внимательно слушаю", weights: { "Ёжик": 3, "Совунья": 1, "Биби": -1 } },
+                    { text: "Я их веду и раздаю задачи!", weights: { "Копатыч": 3, "Лосяш": 1, "Бараш": -1 } },
+                    { text: "Сплю с открытыми глазами", weights: { "Бараш": 3, "Биби": 1, "Пин": -1 } }
+                ]
+            },
+            {
+                text: "У коллеги день рождения. Твои действия?",
+                answers: [
+                    { text: "Выбираю красивый букет и собираю деньги", weights: { "Нюша": 3, "Совунья": 2, "Крош": 1 } },
+                    { text: "Пишу длинное трогательное поздравление", weights: { "Бараш": 3, "Лосяш": 1, "Ёжик": 1 } },
+                    { text: "Организую сюрприз с хлопушками!", weights: { "Крош": 3, "Пин": 1, "Ёжик": -2 } },
+                    { text: "Молча перевожу деньги и работаю дальше", weights: { "Биби": 3, "Пин": 2, "Копатыч": 1 } }
+                ]
+            },
+            {
+                text: "Твой любимый напиток в течение рабочего дня?",
+                answers: [
+                    { text: "Латте на альтернативном молоке с сиропом", weights: { "Нюша": 3, "Бараш": 1, "Копатыч": -1 } },
+                    { text: "Крепкий черный чай или травяной сбор", weights: { "Совунья": 3, "Копатыч": 2, "Лосяш": 1 } },
+                    { text: "Энергетик, чтобы кодить до утра", weights: { "Биби": 3, "Пин": 3, "Совунья": -3 } },
+                    { text: "Вода.<br>Нужно соблюдать<br>водный баланс", weights: { "Ёжик": 3, "Лосяш": 1, "Крош": -1 } }
+                ]
+            },
+            {
+                text: "Как выглядит твой идеальный отпуск?",
+                answers: [
+                    { text: "Активный туризм, горы, палатки!", weights: { "Крош": 3, "Совунья": 1, "Бараш": -2 } },
+                    { text: "Отель<br>«всё включено»,<br>пляж, чилл", weights: { "Копатыч": 3, "Нюша": 2, "Пин": -2 } },
+                    { text: "Читаю книги,<br>до которых<br>не дошли руки", weights: { "Лосяш": 3, "Ёжик": 2, "Крош": -2 } },
+                    { text: "Закрываюсь дома и прохожу новые игры", weights: { "Биби": 3, "Пин": 1, "Совунья": -2 } }
+                ]
+            }
+        ];
+
+        let currentQuestion = 0;
+        let scores = { "Копатыч": 0, "Лосяш": 0, "Нюша": 0, "Совунья": 0, "Пин": 0, "Крош": 0, "Ёжик": 0, "Бараш": 0, "Биби": 0 };
+        let scoreHistory = []; 
+
+        const results = {
+            "Копатыч": "Ты — Копатыч, рабочая сила команды, которая пашет больше всех. Пока остальные обсуждают стратегию, ты уже всё сделал. Проси повышение!",
+            "Лосяш": "Ты — Лосяш, ходячая энциклопедия своей команды. Всегда знаешь ответ даже на самый глупый вопрос, но именно из-за тебя пятиминутки превращаются в часовой созвон. Сделай с этим что-нибудь.",
+            "Нюша": "Ты — Нюша, центр вайба и атмосферы команды. Знаешь все офисные сплетни и превращаешь обычный корпоратив в вечные воспоминания. Главное, чтобы на камеру никто не снимал.",
+            "Совунья": "Ты — Совунья, офисная мама. Напомнишь про обед, поддержишь в сложный день и спасёшь проект в последний момент. А ещё у тебя всегда найдётся таблетка от боли в голове. Спасибо тебе!",
+            "Пин": "Ты — Пин, мастер на все руки и главный инженер. Если что-то сломалось — зовут тебя. Если не сломалось — ты всё равно найдёшь, как это улучшить. От винта!",
+            "Крош": "Ты — Крош, центр внимания своего коллектива. Всегда хватаешься за новые идеи, заряжаешь команду энергией и зовёшь коллег «подышать» на улицу.",
+            "Ёжик": "Ты — Ёжик, бесценный душнила коллектива. Всегда заметишь лишнюю запятую, проверишь всё несколько раз и заранее подготовишься к любому созвону. Без тебя в офисе был бы полный хаос, пусть коллеги это ценят!",
+            "Бараш": "Ты — Бараш, креативный генератор идей. Придумываешь необычные концепции, но дедлайн подкрадывается к тебе незаметно. Работаешь только под вдохновением, так что жизненно необходимы отпуска.",
+            "Биби": "Ты — Биби, тот самый зумер в своём офисе. Самый современный коллега, быстрее всех осваиваешь новое и в любой момент можешь уволиться, просто потому что так захотелось. Сегодня, кстати, работать как-то лень."
+        };
+
+        // ТУТ МЫ ЗАМЕНИЛИ ВСЕ .PNG НА .WEBP И ДОБАВИЛИ ВЕРСИЮ КЭША
+        const characterImages = {
+            "Копатыч": "kopatych.webp?v=22", "Лосяш": "losyash.webp?v=22", "Нюша": "nyusha.webp?v=22", "Совунья": "sovunya.webp?v=22", "Пин": "pin.webp?v=22", "Крош": "krosh.webp?v=22", "Ёжик": "ezhik.webp?v=22", "Бараш": "barash.webp?v=22", "Биби": "bibi.webp?v=22"
+        };
+
+        const storyImages = {
+            "Копатыч": "kopatych_stories.webp?v=23", 
+            "Лосяш": "losyash_stories.webp?v=23", 
+            "Нюша": "nysha_stories.webp?v=23", 
+            "Совунья": "sovunya_stories.webp?v=23", 
+            "Пин": "pin_stories.webp?v=23", 
+            "Крош": "krosh_stories.webp?v=23", 
+            "Ёжик": "ezhik_stories.webp?v=23", 
+            "Бараш": "barash_stories.webp?v=23", 
+            "Биби": "bibi_stories.webp?v=23"
+        };
+
+        function startQuiz() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+
+            document.body.style.backgroundImage = "url('background.webp?v=22')";
+            document.getElementById('start-container').style.display = 'none';
+            
+            const quizContainer = document.getElementById('quiz-container');
+            quizContainer.style.display = 'block';
+            
+            setTimeout(() => {
+                quizContainer.classList.remove('transparent');
+                renderQuestion();
+            }, 50);
+        }
+
+        function renderQuestion() {
+            if (currentQuestion >= questions.length) { showResult(); return; }
+            const q = questions[currentQuestion];
+            
+            document.getElementById('question-counter').innerText = (currentQuestion + 1) + "/" + questions.length;
+            document.getElementById('question-text').innerText = q.text;
+            const btnContainer = document.getElementById('buttons-container');
+            btnContainer.innerHTML = ''; 
+            
+            q.answers.forEach(ans => {
+                const btn = document.createElement('button');
+                btn.className = 'btn';
+                btn.innerHTML = ans.text; 
+                
+                btn.onclick = () => {
+                    const allBtns = btnContainer.querySelectorAll('.btn');
+                    allBtns.forEach(b => b.disabled = true);
+                    
+                    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+                    btn.classList.add('btn-pressed');
+
+                    setTimeout(() => {
+                        const quizPanel = document.getElementById('quiz-container');
+                        quizPanel.classList.add('transparent');
+                        
+                        setTimeout(() => {
+                            scoreHistory.push(ans.weights);
+                            for (let char in ans.weights) { scores[char] += ans.weights[char]; }
+                            currentQuestion++; 
+                            renderQuestion();
+                            quizPanel.classList.remove('transparent');
+                        }, 300); 
+
+                    }, 150); 
+                };
+                btnContainer.appendChild(btn);
+            });
+
+            if (currentQuestion > 0) {
+                const backBtn = document.createElement('button');
+                backBtn.className = 'btn btn-back';
+                backBtn.innerText = 'Назад';
+                
+                backBtn.onclick = () => {
+                    if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+                    backBtn.classList.add('btn-pressed');
+                    
+                    setTimeout(() => {
+                        const quizPanel = document.getElementById('quiz-container');
+                        quizPanel.classList.add('transparent');
+                        
+                        setTimeout(() => {
+                            if (currentQuestion > 0 && scoreHistory.length > 0) {
+                                currentQuestion--;
+                                const lastWeights = scoreHistory.pop();
+                                for (let char in lastWeights) {
+                                    scores[char] -= lastWeights[char];
+                                }
+                                renderQuestion();
+                            }
+                            quizPanel.classList.remove('transparent');
+                        }, 300);
+                    }, 150);
+                };
+                
+                btnContainer.appendChild(backBtn);
+            }
+        }
+
+        function showResult() {
+            if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+
+            let maxScore = Math.max(...Object.values(scores));
+            let topCharacters = Object.keys(scores).filter(char => scores[char] === maxScore);
+            currentWinner = topCharacters[Math.floor(Math.random() * topCharacters.length)];
+            
+            document.getElementById('character-name').innerText = currentWinner + "!";
+            document.getElementById('character-desc').innerText = results[currentWinner];
+            const imgElement = document.getElementById('character-image');
+            imgElement.src = characterImages[currentWinner];
+            imgElement.style.display = 'block';
+
+            const quizPanel = document.getElementById('quiz-container');
+            const resultPanel = document.getElementById('result-container');
+            
+            quizPanel.style.display = 'none';
+            resultPanel.style.display = 'block';
+            
+            setTimeout(() => {
+                resultPanel.classList.remove('transparent');
+            }, 50);
+        }
+
+        function shareStory() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            if (tg.shareToStory) {
+                let baseUrl = window.location.href.split('?')[0]; 
+                baseUrl = baseUrl.substring(0, baseUrl.lastIndexOf('/')) + '/';
+                let mediaUrl = baseUrl + storyImages[currentWinner];
+
+                tg.shareToStory(mediaUrl, {
+                    text: "Мой результат в тесте — " + currentWinner + "! 🏢",
+                    widget_link: {
+                        url: "https://t.me/smeshtestbot",
+                        name: "Пройти тест"
+                    }
+                });
+            } else {
+                alert("Твоя версия Telegram пока не поддерживает публикацию сторис из мини-приложений. Пожалуйста, обнови приложение!");
+            }
+        }
+
+        function shareWithFriends() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+            const shareText = "Я прошел тест «Какой ты Смешарик в офисе?». Мой результат — " + currentWinner + "! Узнай, кто ты: 🏢";
+            const botUrl = "https://t.me/smeshtestbot";
+            const shareUrl = "https://t.me/share/url?url=" + botUrl + "&text=" + encodeURIComponent(shareText);
+            tg.openTelegramLink(shareUrl);
+        }
+
+        function restartQuiz() {
+            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            
+            const resultPanel = document.getElementById('result-container');
+            resultPanel.classList.add('transparent');
+            
+            setTimeout(() => {
+                currentQuestion = 0;
+                scoreHistory = [];
+                for (let char in scores) { scores[char] = 0; }
+                
+                resultPanel.style.display = 'none';
+                
+                const quizPanel = document.getElementById('quiz-container');
+                quizPanel.style.display = 'block';
+                
+                setTimeout(() => {
+                    quizPanel.classList.remove('transparent');
+                    renderQuestion();
+                }, 50);
+            }, 300);
+        }
+    </script>
+</body>
+</html>
+
